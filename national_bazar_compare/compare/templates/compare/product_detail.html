@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}{{ product.name }} - National Bazar Compare{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-5">
+        <img src="{{ product.image_url|default:'https://via.placeholder.com/500' }}" alt="{{ product.name }}" class="img-fluid rounded mb-4">
+    </div>
+    <div class="col-md-7">
+        <h1>{{ product.name }}</h1>
+        <p class="text-muted">{{ product.category }}</p>
+        <p>{{ product.description|default:"No description available." }}</p>
+        
+        <div class="mt-4">
+            <a href="{{ product.gem_url }}" class="btn btn-primary" target="_blank">
+                <i class="bi bi-box-arrow-up-right"></i> View on GEM
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="mt-5">
+    <h2>Price Comparison</h2>
+    
+    {% if comparisons %}
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>Platform</th>
+                    <th>Price (₹)</th>
+                    <th>Last Updated</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for comp in comparisons %}
+                <tr>
+                    <td>{{ comp.get_ecommerce_site_display }}</td>
+                    <td>₹{{ comp.price }}</td>
+                    <td>{{ comp.last_updated|timesince }} ago</td>
+                    <td>
+                        <a href="{{ comp.url }}" class="btn btn-sm btn-outline-primary" target="_blank">
+                            <i class="bi bi-box-arrow-up-right"></i> Visit
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="chart-container mt-4" style="height: 300px;">
+        <canvas id="priceChart"></canvas>
+    </div>
+    {% else %}
+    <div class="alert alert-warning">
+        No price comparisons available for this product.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('priceChart').getContext('2d');
+    const labels = [];
+    const data = [];
+    
+    {% for comp in comparisons %}
+    labels.push('{{ comp.get_ecommerce_site_display }}');
+    data.push({{ comp.price }});
+    {% endfor %}
+    
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Price (₹)',
+                data: data,
+                backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}
