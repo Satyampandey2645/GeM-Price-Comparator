@@ -27,7 +27,6 @@ class HomeView(ListView):
     paginate_by = 10
     
     def get(self, request, *args, **kwargs):
-        # Save search history if user is authenticated and there's a query
         query = self.request.GET.get('q')
         if query and self.request.user.is_authenticated:
             SearchHistory.objects.create(user=self.request.user, query=query)
@@ -38,7 +37,6 @@ class HomeView(ListView):
         query = self.request.GET.get('q')
         
         if query:
-            # Search in name, description, and category
             return queryset.filter(
                 Q(name__icontains=query) | 
                 Q(description__icontains=query) |
@@ -57,7 +55,6 @@ class ProductDetailView(DetailView):
         product = self.get_object()
         comparisons = PriceComparison.objects.filter(product=product)
         
-        # Save comparison history if user is authenticated
         if self.request.user.is_authenticated:
             ComparisonHistory.objects.create(user=self.request.user, product=product)
         
@@ -69,38 +66,31 @@ def scrape_gem(request):
     if request.method == 'POST':
         query = request.POST.get('query', '').strip()
         
-        # Save search history if user is authenticated
         if request.user.is_authenticated:
             SearchHistory.objects.create(user=request.user, query=query)
             
         try:
-            # Configure retry strategy
             session = requests.Session()
             retries = Retry(
-                total=3,  # Maximum retries
-                backoff_factor=1,  # Delay between retries
-                status_forcelist=[500, 502, 503, 504]  # Retry on these status codes
+                total=3,  
+                backoff_factor=1,  
+                status_forcelist=[500, 502, 503, 504]  
             )
             session.mount('https://', HTTPAdapter(max_retries=retries))
 
-            # Make request with longer timeout
             response = session.get(
                 f"https://mkp.gem.gov.in/search?q={query}",
                 headers={
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
                 },
-                timeout=30  # Increased timeout to 30 seconds
+                timeout=30  
             )
             response.raise_for_status()
             
-            # Parse the HTML
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # Debug: Print the first 500 characters of HTML
-            # print("HTML Sample:", response.text[:500])
             
-            # Extract category groups
-            category_groups = soup.select('li.bn-group')  # Each category group
+            category_groups = soup.select('li.bn-group')  
             
             if not category_groups:
                 return render(request, 'compare/scrape_error.html', {
@@ -109,11 +99,10 @@ def scrape_gem(request):
                     'html_sample': response.text[:1000]
                 })
             
-            # Collect all category links
             category_links = []
             for group in category_groups:
-                category_name = group.find('strong').get_text(strip=True)  # Category name
-                links = group.select('.bn-list .bn-link a')  # Links within the category
+                category_name = group.find('strong').get_text(strip=True)  
+                links = group.select('.bn-list .bn-link a')  
                 
                 for link in links:
                     href = link.get('href')
@@ -131,13 +120,10 @@ def scrape_gem(request):
                     'html_sample': response.text[:1000]
                 })
             
-            # Step 2: Scrape products from each category
             products = []
             for category in category_links:
                 try:
-                    # logger.info(f"Scraping products from category: {category['name']} ({category['url']})")
                     
-                    # Fetch the category page
                     category_response = session.get(
                         category['url'],
                         headers={'User-Agent': 'Mozilla/5.0'},
@@ -145,15 +131,13 @@ def scrape_gem(request):
                     )
                     category_response.raise_for_status()
                     
-                    # Parse the category page
                     category_soup = BeautifulSoup(category_response.text, 'html.parser')
                     
-                    # Extract product items
-                    product_items = category_soup.select('.variant-wrapper')  # Updated selector
+                    product_items = category_soup.select('.variant-wrapper')  
                     
-                    for item in product_items[:10]:  # Limit to 10 products per category
+                    for item in product_items[:10]: 
                         try:
-                            # Extract product details
+                            
                             name_tag = item.select_one('.variant-title a')
                             name = name_tag.get_text(strip=True) if name_tag else 'Unknown Product'
                             
@@ -176,7 +160,6 @@ def scrape_gem(request):
                             moq_tag = item.select_one('.variant-moq')
                             min_order_quantity = moq_tag.get_text(strip=True).replace('Min. Qty. Per Consignee:', '').strip() if moq_tag else 'N/A'
                             
-                            # Create/update product
                             product, created = Product.objects.get_or_create(
                                 gem_url=url,
                                 defaults={
@@ -188,17 +171,14 @@ def scrape_gem(request):
                                 }
                             )
                             
-                            # Update price comparison
                             PriceComparison.objects.update_or_create(
                                 product=product,
                                 ecommerce_site='GEM',
                                 defaults={'price': price_value, 'url': url}
                             )
 
-                            # Step 3: Compare with Amazon
                             amazon_price = compare_prices_with_ecommerce(name, session)
                             
-                            # Update Amazon price comparison
                             if amazon_price:
                                 PriceComparison.objects.update_or_create(
                                     product=product,
@@ -209,11 +189,11 @@ def scrape_gem(request):
                             products.append(product)
                         
                         except Exception as e:
-                            # logger.error(f"Error processing product: {e}")
+                            
                             continue
                 
                 except Exception as e:
-                    # logger.error(f"Error processing category link {category['url']}: {e}")
+                    
                     continue
             
             if not products:
@@ -229,7 +209,7 @@ def scrape_gem(request):
             })
             
         except Exception as e:
-            # logger.error(f"Scraping failed: {e}")
+            
             return render(request, 'compare/scrape_error.html', {
                 'error': str(e),
                 'query': query,
@@ -246,7 +226,7 @@ def compare_prices_with_ecommerce(product_name, session):
     amazon_price = None
     
     try:
-        # Search on Amazon
+        
         amazon_search_url = f"https://www.amazon.in/s?k={quote(product_name)}"
         amazon_response = session.get(
             amazon_search_url,
@@ -256,7 +236,7 @@ def compare_prices_with_ecommerce(product_name, session):
         amazon_response.raise_for_status()
         amazon_soup = BeautifulSoup(amazon_response.text, 'html.parser')
         
-        # Extract Amazon price
+        
         amazon_price_tag = amazon_soup.select_one('.a-price-whole')
         if amazon_price_tag:
             try:
@@ -276,13 +256,10 @@ class ProfileView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
         
-        # Count searches
         context['search_count'] = SearchHistory.objects.filter(user=user).count()
         
-        # Count comparisons
         context['comparison_count'] = ComparisonHistory.objects.filter(user=user).count()
         
-        # Count unique products compared
         context['product_count'] = ComparisonHistory.objects.filter(
             user=user
         ).values('product').distinct().count()
