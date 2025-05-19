@@ -1,0 +1,23 @@
+# Django
+*.sqlite3
+*.pyc
+__pycache__/
+migrations/
+
+# Virtual Environment
+nbcompare_env/
+.env/
+.env*
+
+# Secrets
+secrets.json
+settings/local.py
+
+# Static files (if collected)
+staticfiles/
+media/
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
